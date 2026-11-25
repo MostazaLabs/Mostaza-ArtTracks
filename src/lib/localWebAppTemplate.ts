@@ -1482,7 +1482,12 @@ export function buildLocalWebAppFiles(): LocalPackageFile[] {
         'Set fso = CreateObject("Scripting.FileSystemObject")\r\n' +
         'dir = fso.GetParentFolderName(WScript.ScriptFullName)\r\n' +
         'Set shell = CreateObject("WScript.Shell")\r\n' +
-        'If WScript.Arguments.Count > 0 And WScript.Arguments(0) = "--headless" Then\r\n' +
+        'shell.CurrentDirectory = dir\r\n' +
+        'isHeadless = False\r\n' +
+        'If WScript.Arguments.Count > 0 Then\r\n' +
+        '  If WScript.Arguments(0) = "--headless" Then isHeadless = True\r\n' +
+        'End If\r\n' +
+        'If isHeadless Then\r\n' +
         '  shell.Run "node """ & dir & "\\server.mjs"" --headless", 0, False\r\n' +
         'Else\r\n' +
         '  shell.Run "node """ & dir & "\\launcher.mjs""", 0, False\r\n' +
