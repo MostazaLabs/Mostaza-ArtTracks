@@ -142,9 +142,10 @@ loadEnvFile();
 
 const HOST = process.env.HOST || '0.0.0.0';
 const PORT = Number(process.env.PORT) || 3000;
+const TAILSCALE_ALIAS = (process.env.TAILSCALE_HOSTNAME || 'MostazaArtTracks').trim() || 'MostazaArtTracks';
 const HEADLESS = process.argv.includes('--headless');
 
-// Techo recomendado para LenovoPablo (Core 5 210H, 16 GB RAM, IP doméstica):
+// Techo recomendado para equipo doméstico (Core 5 210H, 16 GB RAM, IP residencial):
 // 6 usuarios activos simultáneos y máximo 3 búsquedas pesadas en paralelo (con cola automática).
 const MAX_ACTIVE_USERS = Math.min(Math.max(Number(process.env.MAX_ACTIVE_USERS) || 6, 1), 20);
 const MAX_PARALLEL_CURATIONS = Math.min(Math.max(Number(process.env.MAX_PARALLEL_CURATIONS) || 3, 1), 10);
@@ -255,7 +256,6 @@ function getNetworkInfo() {
   const interfaces = os.networkInterfaces();
   const tailscaleUrls = [];
   const lanUrls = [];
-  const hostLower = os.hostname().toLowerCase();
 
   for (const entries of Object.values(interfaces)) {
     for (const info of entries || []) {
@@ -271,8 +271,8 @@ function getNetworkInfo() {
 
   return {
     port: PORT,
-    hostname: os.hostname(),
-    tailscaleHostnameUrl: tailscaleUrls.length > 0 ? 'http://' + hostLower + ':' + PORT : null,
+    hostname: TAILSCALE_ALIAS,
+    tailscaleHostnameUrl: tailscaleUrls.length > 0 ? 'http://' + TAILSCALE_ALIAS + ':' + PORT : null,
     tailscaleUrls,
     lanUrls,
     localUrl: 'http://localhost:' + PORT,
@@ -944,7 +944,7 @@ server.listen(PORT, HOST, () => {
   const net = getNetworkInfo();
   console.log('\\nMostaza ArtTracks (MostazaLabs) ejecutándose en: ' + net.localUrl);
   if (net.tailscaleUrls.length > 0) {
-    console.log('Acceso móvil por Tailscale: ' + net.tailscaleUrls[0] + (net.tailscaleHostnameUrl ? '  (o ' + net.tailscaleHostnameUrl + ')' : ''));
+    console.log('Acceso móvil por Tailscale: ' + (net.tailscaleHostnameUrl || net.tailscaleUrls[0]) + '  (' + net.tailscaleUrls[0] + ')');
   }
   console.log('Límite de seguridad: máximo ' + MAX_ACTIVE_USERS + ' usuarios simultáneos · ' + MAX_PARALLEL_CURATIONS + ' curaciones en paralelo.');
   if (!HEADLESS) {
@@ -1207,9 +1207,13 @@ function buildLocalIndexHtml(): string {
         .then((r) => (r.ok ? r.json() : null))
         .then((info) => {
           if (!info) return;
-          const mobileUrl = info.tailscaleUrls?.[0] || info.tailscaleHostnameUrl;
-          if (mobileUrl) {
-            tailscaleUrlEl.textContent = mobileUrl;
+          const primaryMobileUrl = info.tailscaleHostnameUrl || info.tailscaleUrls?.[0];
+          const fallbackIpUrl = info.tailscaleUrls?.[0];
+          if (primaryMobileUrl) {
+            tailscaleUrlEl.textContent = fallbackIpUrl && fallbackIpUrl !== primaryMobileUrl
+              ? primaryMobileUrl + ' (' + fallbackIpUrl + ')'
+              : primaryMobileUrl;
+            const mobileUrl = primaryMobileUrl;
             tailscaleBar.classList.remove('hidden');
             copyTsBtn.onclick = async () => {
               try {
@@ -1460,116 +1464,122 @@ function buildLocalIndexHtml(): string {
 `;
 }
 
-export async function downloadLocalWebAppZip(): Promise<void> {
-  const zip = new JSZip();
-  zip.file('server.mjs', buildLocalServerMjs());
-  zip.file('launcher.mjs', buildLocalLauncherMjs());
-  zip.file('index.html', buildLocalIndexHtml());
-  zip.file('arttrack.ico', buildArtTrackIco());
+export interface LocalPackageFile {
+  name: string;
+  content: string | Uint8Array;
+  executable?: boolean;
+}
 
-  zip.file(
-    'Mostaza ArtTracks.vbs',
-    'Set fso = CreateObject("Scripting.FileSystemObject")\r\n' +
-      'dir = fso.GetParentFolderName(WScript.ScriptFullName)\r\n' +
-      'Set shell = CreateObject("WScript.Shell")\r\n' +
-      'If WScript.Arguments.Count > 0 And WScript.Arguments(0) = "--headless" Then\r\n' +
-      '  shell.Run "node """ & dir & "\\server.mjs"" --headless", 0, False\r\n' +
-      'Else\r\n' +
-      '  shell.Run "node """ & dir & "\\launcher.mjs""", 0, False\r\n' +
-      'End If\r\n'
-  );
-
-  zip.file(
-    'Crear-Acceso-Directo-Escritorio.bat',
-    '@echo off\r\n' +
-      'setlocal\r\n' +
-      'where node >nul 2>nul\r\n' +
-      'if errorlevel 1 (\r\n' +
-      '  echo Necesitas Node.js 18 o superior: https://nodejs.org\r\n' +
-      '  pause\r\n' +
-      '  exit /b 1\r\n' +
-      ')\r\n' +
-      'set "APP_DIR=%~dp0"\r\n' +
-      'if "%APP_DIR:~-1%"=="\\" set "APP_DIR=%APP_DIR:~0,-1%"\r\n' +
-      'powershell -NoProfile -ExecutionPolicy Bypass -Command "' +
-      '$desktop = [Environment]::GetFolderPath(\'Desktop\'); ' +
-      '$ws = New-Object -ComObject WScript.Shell; ' +
-      '$sc = $ws.CreateShortcut((Join-Path $desktop \'Mostaza ArtTracks.lnk\')); ' +
-      '$sc.TargetPath = \'wscript.exe\'; ' +
-      '$sc.Arguments = [char]34 + $env:APP_DIR + \'\\Mostaza ArtTracks.vbs\' + [char]34; ' +
-      '$sc.WorkingDirectory = $env:APP_DIR; ' +
-      '$sc.IconLocation = $env:APP_DIR + \'\\arttrack.ico,0\'; ' +
-      '$sc.Description = \'Abrir Mostaza ArtTracks\'; ' +
-      '$sc.Save()"\r\n' +
-      'echo.\r\n' +
-      'echo Acceso directo "Mostaza ArtTracks" creado en tu Escritorio.\r\n' +
-      'echo Haz doble clic en el icono del Escritorio para abrir la WebApp sin consola.\r\n' +
-      'echo Para acceder desde el movil por Tailscale usa http://%COMPUTERNAME%:3000 (si Windows Firewall pregunta, pulsa Permitir acceso).\r\n' +
-      'echo.\r\n' +
-      'pause\r\n'
-  );
-
-  zip.file(
-    'Activar-Inicio-Con-Windows.bat',
-    '@echo off\r\n' +
-      'setlocal\r\n' +
-      'set "APP_DIR=%~dp0"\r\n' +
-      'if "%APP_DIR:~-1%"=="\\" set "APP_DIR=%APP_DIR:~0,-1%"\r\n' +
-      'powershell -NoProfile -ExecutionPolicy Bypass -Command "' +
-      '$startup = [Environment]::GetFolderPath(\'Startup\'); ' +
-      '$ws = New-Object -ComObject WScript.Shell; ' +
-      '$sc = $ws.CreateShortcut((Join-Path $startup \'Mostaza ArtTracks Servidor.lnk\')); ' +
-      '$sc.TargetPath = \'wscript.exe\'; ' +
-      '$sc.Arguments = [char]34 + $env:APP_DIR + \'\\Mostaza ArtTracks.vbs\' + [char]34 + \' --headless\'; ' +
-      '$sc.WorkingDirectory = $env:APP_DIR; ' +
-      '$sc.IconLocation = $env:APP_DIR + \'\\arttrack.ico,0\'; ' +
-      '$sc.Save()"\r\n' +
-      'echo.\r\n' +
-      'echo Servidor configurado para arrancar automaticamente en segundo plano al encender Windows (listo para Tailscale).\r\n' +
-      'pause\r\n'
-  );
-
-  zip.file(
-    'Detener-Mostaza-ArtTracks.bat',
-    '@echo off\r\n' +
-      'powershell -NoProfile -Command "try { Invoke-RestMethod -Method Post -Uri http://127.0.0.1:3000/api/shutdown | Out-Null; Write-Host \'Mostaza ArtTracks detenido correctamente.\' } catch { Write-Host \'El servidor no estaba ejecutandose.\' }"\r\n' +
-      'pause\r\n'
-  );
-
-  zip.file(
-    '.env.example',
-    '# Configuración opcional de Mostaza ArtTracks (MostazaLabs)\n' +
-      'PORT=3000\n' +
-      'HOST=0.0.0.0\n' +
-      '# Recomendado para IP doméstica y LenovoPablo (Core 5 210H / 16 GB RAM):\n' +
-      'MAX_ACTIVE_USERS=6\n' +
-      'MAX_PARALLEL_CURATIONS=3\n' +
-      '# Opcional: añade tu clave de Gemini si quieres ranking editorial IA (funciona igualmente sin clave).\n' +
-      'GEMINI_API_KEY=\n'
-  );
-
-  zip.file(
-    'iniciar-windows.bat',
-    '@echo off\r\n' +
-      'echo Iniciando Mostaza ArtTracks (MostazaLabs)...\r\n' +
-      'where node >nul 2>nul\r\n' +
-      'if errorlevel 1 (\r\n' +
-      '  echo Necesitas Node.js 18 o superior: https://nodejs.org\r\n' +
-      '  pause\r\n' +
-      '  exit /b 1\r\n' +
-      ')\r\n' +
-      'node "%~dp0server.mjs"\r\n' +
-      'pause\r\n'
-  );
-
-  zip.file(
-    'iniciar-mac-linux.sh',
-    '#!/usr/bin/env bash\ncd "$(dirname "$0")"\nnode server.mjs\n'
-  );
-
-  zip.file(
-    'LEEME.txt',
-    `MOSTAZA ARTTRACKS (MostazaLabs) · WEBAPP LOCAL + ESCRITORIO + TAILSCALE
+export function buildLocalWebAppFiles(): LocalPackageFile[] {
+  return [
+    { name: 'server.mjs', content: buildLocalServerMjs() },
+    { name: 'launcher.mjs', content: buildLocalLauncherMjs() },
+    { name: 'index.html', content: buildLocalIndexHtml() },
+    { name: 'arttrack.ico', content: buildArtTrackIco() },
+    {
+      name: 'Mostaza ArtTracks.vbs',
+      content:
+        'Set fso = CreateObject("Scripting.FileSystemObject")\r\n' +
+        'dir = fso.GetParentFolderName(WScript.ScriptFullName)\r\n' +
+        'Set shell = CreateObject("WScript.Shell")\r\n' +
+        'If WScript.Arguments.Count > 0 And WScript.Arguments(0) = "--headless" Then\r\n' +
+        '  shell.Run "node """ & dir & "\\server.mjs"" --headless", 0, False\r\n' +
+        'Else\r\n' +
+        '  shell.Run "node """ & dir & "\\launcher.mjs""", 0, False\r\n' +
+        'End If\r\n',
+    },
+    {
+      name: 'Crear-Acceso-Directo-Escritorio.bat',
+      content:
+        '@echo off\r\n' +
+        'setlocal\r\n' +
+        'where node >nul 2>nul\r\n' +
+        'if errorlevel 1 (\r\n' +
+        '  echo Necesitas Node.js 18 o superior: https://nodejs.org\r\n' +
+        '  pause\r\n' +
+        '  exit /b 1\r\n' +
+        ')\r\n' +
+        'set "APP_DIR=%~dp0"\r\n' +
+        'if "%APP_DIR:~-1%"=="\\" set "APP_DIR=%APP_DIR:~0,-1%"\r\n' +
+        'powershell -NoProfile -ExecutionPolicy Bypass -Command "' +
+        '$desktop = [Environment]::GetFolderPath(\'Desktop\'); ' +
+        '$ws = New-Object -ComObject WScript.Shell; ' +
+        '$sc = $ws.CreateShortcut((Join-Path $desktop \'Mostaza ArtTracks.lnk\')); ' +
+        '$sc.TargetPath = \'wscript.exe\'; ' +
+        '$sc.Arguments = [char]34 + $env:APP_DIR + \'\\Mostaza ArtTracks.vbs\' + [char]34; ' +
+        '$sc.WorkingDirectory = $env:APP_DIR; ' +
+        '$sc.IconLocation = $env:APP_DIR + \'\\arttrack.ico,0\'; ' +
+        '$sc.Description = \'Abrir Mostaza ArtTracks\'; ' +
+        '$sc.Save()"\r\n' +
+        'echo.\r\n' +
+        'echo Acceso directo "Mostaza ArtTracks" creado en tu Escritorio.\r\n' +
+        'echo Haz doble clic en el icono del Escritorio para abrir la WebApp sin consola.\r\n' +
+        'echo Para acceder desde el movil por Tailscale usa http://MostazaArtTracks:3000 (si Windows Firewall pregunta, pulsa Permitir acceso).\r\n' +
+        'echo.\r\n' +
+        'pause\r\n',
+    },
+    {
+      name: 'Activar-Inicio-Con-Windows.bat',
+      content:
+        '@echo off\r\n' +
+        'setlocal\r\n' +
+        'set "APP_DIR=%~dp0"\r\n' +
+        'if "%APP_DIR:~-1%"=="\\" set "APP_DIR=%APP_DIR:~0,-1%"\r\n' +
+        'powershell -NoProfile -ExecutionPolicy Bypass -Command "' +
+        '$startup = [Environment]::GetFolderPath(\'Startup\'); ' +
+        '$ws = New-Object -ComObject WScript.Shell; ' +
+        '$sc = $ws.CreateShortcut((Join-Path $startup \'Mostaza ArtTracks Servidor.lnk\')); ' +
+        '$sc.TargetPath = \'wscript.exe\'; ' +
+        '$sc.Arguments = [char]34 + $env:APP_DIR + \'\\Mostaza ArtTracks.vbs\' + [char]34 + \' --headless\'; ' +
+        '$sc.WorkingDirectory = $env:APP_DIR; ' +
+        '$sc.IconLocation = $env:APP_DIR + \'\\arttrack.ico,0\'; ' +
+        '$sc.Save()"\r\n' +
+        'echo.\r\n' +
+        'echo Servidor configurado para arrancar automaticamente en segundo plano al encender Windows (listo para Tailscale).\r\n' +
+        'pause\r\n',
+    },
+    {
+      name: 'Detener-Mostaza-ArtTracks.bat',
+      content:
+        '@echo off\r\n' +
+        'powershell -NoProfile -Command "try { Invoke-RestMethod -Method Post -Uri http://127.0.0.1:3000/api/shutdown | Out-Null; Write-Host \'Mostaza ArtTracks detenido correctamente.\' } catch { Write-Host \'El servidor no estaba ejecutandose.\' }"\r\n' +
+        'pause\r\n',
+    },
+    {
+      name: '.env.example',
+      content:
+        '# Configuración opcional de Mostaza ArtTracks (MostazaLabs)\n' +
+        'PORT=3000\n' +
+        'HOST=0.0.0.0\n' +
+        'TAILSCALE_HOSTNAME=MostazaArtTracks\n' +
+        '# Recomendado para IP doméstica (Core 5 210H / 16 GB RAM):\n' +
+        'MAX_ACTIVE_USERS=6\n' +
+        'MAX_PARALLEL_CURATIONS=3\n' +
+        '# Opcional: añade tu clave de Gemini si quieres ranking editorial IA (funciona igualmente sin clave).\n' +
+        'GEMINI_API_KEY=\n',
+    },
+    {
+      name: 'iniciar-windows.bat',
+      content:
+        '@echo off\r\n' +
+        'echo Iniciando Mostaza ArtTracks (MostazaLabs)...\r\n' +
+        'where node >nul 2>nul\r\n' +
+        'if errorlevel 1 (\r\n' +
+        '  echo Necesitas Node.js 18 o superior: https://nodejs.org\r\n' +
+        '  pause\r\n' +
+        '  exit /b 1\r\n' +
+        ')\r\n' +
+        'node "%~dp0server.mjs"\r\n' +
+        'pause\r\n',
+    },
+    {
+      name: 'iniciar-mac-linux.sh',
+      executable: true,
+      content: '#!/usr/bin/env bash\ncd "$(dirname "$0")"\nnode server.mjs\n',
+    },
+    {
+      name: 'LEEME.txt',
+      content: `MOSTAZA ARTTRACKS (MostazaLabs) · WEBAPP LOCAL + ESCRITORIO + TAILSCALE
 ========================================================================
 
 Requisito único: Node.js 18 o superior (https://nodejs.org). No requiere npm install.
@@ -1583,20 +1593,38 @@ Requisito único: Node.js 18 o superior (https://nodejs.org). No requiere npm in
      solo al encender el PC para tenerlo siempre disponible desde el móvil por Tailscale.
    - Para apagarlo en segundo plano, ejecuta "Detener-Mostaza-ArtTracks.bat".
 
-2. ACCEDER DESDE TU MÓVIL CON TAILSCALE:
+2. EJECUCIÓN EN MAC Y LINUX:
+   - Abre una terminal en esta carpeta y ejecuta: ./iniciar-mac-linux.sh
+     (o directamente: node server.mjs)
+
+3. ACCEDER DESDE TU MÓVIL CON TAILSCALE:
    - El servidor escucha en todas las interfaces (0.0.0.0:3000).
    - Si Windows Firewall pregunta la primera vez, pulsa "Permitir acceso".
    - Con Tailscale activo en tu PC y en tu móvil, abre en el navegador del móvil:
-     http://LenovoPablo:3000  (o tu IP 100.x.x.x:3000 de Tailscale que verás arriba en la WebApp).
+     http://MostazaArtTracks:3000  (o tu IP 100.x.x.x:3000 de Tailscale que verás arriba en la WebApp).
+   - Para que http://MostazaArtTracks:3000 resuelva sin mostrar el nombre real de tu equipo,
+     abre el panel web de Tailscale -> Machines -> "..." en tu PC -> Edit machine name -> mostazaarttracks.
 
-3. PROTECCIÓN DE RECURSOS Y AFORO:
+4. PROTECCIÓN DE RECURSOS Y AFORO:
    - Por defecto admite hasta 6 visitantes simultáneos y 3 curaciones pesadas en paralelo
      (con cola automática) para proteger tu IP doméstica de bloqueos de YouTube y mantener
      el portátil fluido. Puedes ajustar MAX_ACTIVE_USERS en un archivo .env si lo deseas.
 
 MostazaLabs: División comercial de la Asociación Pirata Ibérica.
-`
-  );
+`,
+    },
+  ];
+}
+
+export async function downloadLocalWebAppZip(): Promise<void> {
+  const zip = new JSZip();
+  for (const file of buildLocalWebAppFiles()) {
+    zip.file(
+      file.name,
+      file.content,
+      file.executable ? { unixPermissions: '755' } : undefined
+    );
+  }
 
   const content = await zip.generateAsync({ type: 'blob' });
   const url = URL.createObjectURL(content);

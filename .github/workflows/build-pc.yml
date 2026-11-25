@@ -1,0 +1,60 @@
+name: Empaquetar Mostaza ArtTracks PC
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-pc:
+    name: Verificar y empaquetar para Windows, macOS y Linux
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Instalar dependencias
+        run: npm install
+
+      - name: Verificar tipos TypeScript
+        run: npm run lint
+
+      - name: Compilar WebApp con Vite
+        run: npm run build
+
+      - name: Generar y verificar paquetes PC (Windows, macOS y Linux)
+        run: npx tsx .github/scripts/build-pc-release.mjs
+
+      - name: Subir paquetes PC como artefacto de Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mostaza-ArtTracks-PC
+          path: |
+            Mostaza-ArtTracks-PC.zip
+            Mostaza-ArtTracks-Mac-Linux.tar.gz
+          retention-days: 90
+
+      - name: Publicar paquetes PC en GitHub Releases
+        uses: softprops/action-gh-release@v2
+        continue-on-error: true
+        with:
+          tag_name: latest
+          name: Mostaza ArtTracks PC (Windows, macOS y Linux)
+          body: |
+            Descarga directa de **Mostaza ArtTracks** para PC (Windows, macOS y Linux) verificada y empaquetada automáticamente por GitHub Actions.
+            Incluye acceso directo en Escritorio para Windows (`Crear-Acceso-Directo-Escritorio.bat`), script para macOS/Linux (`iniciar-mac-linux.sh`) y acceso móvil por Tailscale (`http://MostazaArtTracks:3000`).
+            MostazaLabs: División comercial de la Asociación Pirata Ibérica.
+          files: |
+            Mostaza-ArtTracks-PC.zip
+            Mostaza-ArtTracks-Mac-Linux.tar.gz

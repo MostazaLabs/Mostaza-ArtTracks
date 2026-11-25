@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+dist-pc/
+Mostaza-ArtTracks-PC.zip
+Mostaza-ArtTracks-Mac-Linux.tar.gz

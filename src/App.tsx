@@ -95,20 +95,22 @@ export default function App() {
           .trim();
 
       const fetchBatchWithRetry = async (batchTarget: number) => {
+        const payload = {
+          prompt: fullPrompt,
+          artist: cleanArtist,
+          trackCount: batchTarget,
+          strictTopicOnly,
+          excludeLive,
+          excludeRemixes,
+          excludeTitles,
+          batchMode: true,
+        };
+
         for (let attempt = 1; attempt <= 2; attempt++) {
           const res = await fetch('/api/curate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              prompt: fullPrompt,
-              artist: cleanArtist,
-              trackCount: batchTarget,
-              strictTopicOnly,
-              excludeLive,
-              excludeRemixes,
-              excludeTitles,
-              batchMode: true,
-            }),
+            body: JSON.stringify(payload),
           });
 
           const contentType = res.headers.get('content-type') || '';

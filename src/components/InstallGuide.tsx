@@ -13,11 +13,11 @@ export function InstallGuide({
     <section id="instalacion" className="space-y-6 pb-8">
       <div className="space-y-1.5 max-w-2xl">
         <h2 className="font-display text-2xl font-semibold tracking-tight text-[#F3F4F6]">
-          Ejecución local en tu ordenador y acceso por Tailscale
+          Ejecución local en PC (Windows, macOS y Linux) y acceso por Tailscale
         </h2>
         <p className="text-sm text-[#9CA3AF]">
-          Descarga la WebApp autónoma de Mostaza ArtTracks para ejecutarla directamente en tu equipo
-          con icono propio en el Escritorio y acceso remoto desde tu móvil.
+          Ejecuta Mostaza ArtTracks directamente en tu ordenador con icono de Escritorio, accede
+          desde tu móvil por Tailscale o descarga el paquete listo para PC desde GitHub Actions y Releases.
         </p>
       </div>
 
@@ -26,11 +26,11 @@ export function InstallGuide({
           <div className="space-y-2">
             <p className="font-mono text-xs font-semibold text-[#E5482B]">01.</p>
             <h3 className="font-display text-base font-semibold text-[#F3F4F6]">
-              Descarga y descomprime
+              WebApp Local para PC
             </h3>
             <p className="text-xs leading-relaxed text-[#9CA3AF]">
               Descarga el paquete <span className="font-mono text-[#D1D5DB]">.zip</span> y extráelo
-              en una carpeta fija. Solo necesita{' '}
+              en una carpeta fija. Funciona en Windows, macOS y Linux solo con{' '}
               <span className="font-mono text-[#D1D5DB]">Node.js 18+</span> (sin{' '}
               <span className="font-mono text-[#D1D5DB]">npm install</span>).
             </p>
@@ -49,26 +49,30 @@ export function InstallGuide({
         <div className="rounded-xl border border-white/10 bg-[#12151B] p-5 space-y-2">
           <p className="font-mono text-xs font-semibold text-[#E5482B]">02.</p>
           <h3 className="font-display text-base font-semibold text-[#F3F4F6]">
-            Icono directo en el Escritorio
+            Icono en Escritorio y Tailscale
           </h3>
           <p className="text-xs leading-relaxed text-[#9CA3AF]">
-            Haz doble clic una sola vez en{' '}
-            <span className="font-mono text-[#D1D5DB]">Crear-Acceso-Directo-Escritorio.bat</span>.
-            Creará el acceso directo{' '}
-            <span className="text-[#D1D5DB] font-medium">Mostaza ArtTracks</span> en tu Escritorio
-            para abrir la WebApp sin ventanas de consola.
+            En Windows ejecuta una vez{' '}
+            <span className="font-mono text-[#D1D5DB]">Crear-Acceso-Directo-Escritorio.bat</span>{' '}
+            para crear el icono <span className="text-[#D1D5DB] font-medium">Mostaza ArtTracks</span>.
+            Escucha en <span className="font-mono text-[#D1D5DB]">0.0.0.0:3000</span> para abrir{' '}
+            <span className="font-mono text-[#D1D5DB]">http://MostazaArtTracks:3000</span> por Tailscale
+            (tope seguro de 6 usuarios y 3 curaciones en paralelo).
           </p>
         </div>
 
         <div className="rounded-xl border border-white/10 bg-[#12151B] p-5 space-y-2">
           <p className="font-mono text-xs font-semibold text-[#E5482B]">03.</p>
           <h3 className="font-display text-base font-semibold text-[#F3F4F6]">
-            Móvil con Tailscale y límite seguro
+            Paquetes automáticos PC en GitHub
           </h3>
           <p className="text-xs leading-relaxed text-[#9CA3AF]">
-            Escucha en <span className="font-mono text-[#D1D5DB]">0.0.0.0:3000</span> para abrirla
-            desde tu móvil vía Tailscale, con tope automático de 6 usuarios simultáneos y 3
-            curaciones en paralelo para no saturar hardware de bajos recursos.
+            Al subir cambios a GitHub, el workflow de{' '}
+            <span className="font-mono text-[#D1D5DB]">Actions</span> verifica el código y empaqueta
+            automáticamente{' '}
+            <span className="font-mono text-[#D1D5DB]">Mostaza-ArtTracks-PC.zip</span> y{' '}
+            <span className="font-mono text-[#D1D5DB]">Mostaza-ArtTracks-Mac-Linux.tar.gz</span>{' '}
+            (descargables en Actions y Releases).
           </p>
         </div>
       </div>
