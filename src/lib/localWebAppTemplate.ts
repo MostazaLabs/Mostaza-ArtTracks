@@ -1207,13 +1207,14 @@ function buildLocalIndexHtml(): string {
         .then((r) => (r.ok ? r.json() : null))
         .then((info) => {
           if (!info) return;
-          const primaryMobileUrl = info.tailscaleHostnameUrl || info.tailscaleUrls?.[0];
-          const fallbackIpUrl = info.tailscaleUrls?.[0];
-          if (primaryMobileUrl) {
-            tailscaleUrlEl.textContent = fallbackIpUrl && fallbackIpUrl !== primaryMobileUrl
-              ? primaryMobileUrl + ' (' + fallbackIpUrl + ')'
-              : primaryMobileUrl;
-            const mobileUrl = primaryMobileUrl;
+          const directIpUrl = info.tailscaleUrls?.[0];
+          const aliasUrl = info.tailscaleHostnameUrl;
+          const mobileUrl = directIpUrl || aliasUrl;
+          if (mobileUrl) {
+            tailscaleUrlEl.textContent =
+              directIpUrl && aliasUrl && aliasUrl !== directIpUrl
+                ? directIpUrl + '  (o ' + aliasUrl + ' si renombraste la máquina en Tailscale)'
+                : mobileUrl;
             tailscaleBar.classList.remove('hidden');
             copyTsBtn.onclick = async () => {
               try {
