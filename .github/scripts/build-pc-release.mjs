@@ -72,13 +72,27 @@ if (!ready) {
   throw new Error('Smoke test failed: local PC server did not become ready');
 }
 
-// 3. Write ZIP (Windows / Universal PC) and tar.gz (macOS / Linux with +x permissions)
-const zipBuffer = await zip.generateAsync({
-  type: 'nodebuffer',
-  compression: 'DEFLATE',
-  compressionOptions: { level: 9 },
-});
-fs.writeFileSync(path.join(root, 'Mostaza-ArtTracks-PC.zip'), zipBuffer);
+// 3. Write clean PKZIP 2.0 (Windows Explorer compatible) and tar.gz (macOS / Linux with +x permissions)
+const outZipPath = path.join(root, 'Mostaza-ArtTracks-PC.zip');
+let builtWithSystemZip = false;
+try {
+  execSync(
+    `python3 -c "import os, zipfile; z=zipfile.ZipFile('${outZipPath.replace(/'/g, "\\'")}', 'w', zipfile.ZIP_DEFLATED); [z.write(os.path.join('${outDir.replace(/'/g, "\\'")}', f), f) for f in sorted(os.listdir('${outDir.replace(/'/g, "\\'")}'))]; z.close()"`,
+    { stdio: 'inherit' }
+  );
+  builtWithSystemZip = true;
+} catch {
+  // Fallback to JSZip below
+}
+
+if (!builtWithSystemZip) {
+  const zipBuffer = await zip.generateAsync({
+    type: 'nodebuffer',
+    compression: 'DEFLATE',
+    compressionOptions: { level: 6 },
+  });
+  fs.writeFileSync(outZipPath, zipBuffer);
+}
 
 execSync(
   `tar -czf "${path.join(root, 'Mostaza-ArtTracks-Mac-Linux.tar.gz')}" -C "${path.join(root, 'dist-pc')}" Mostaza-ArtTracks`,

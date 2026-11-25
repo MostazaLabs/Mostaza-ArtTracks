@@ -40,9 +40,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Mostaza-ArtTracks-PC
-          path: |
-            Mostaza-ArtTracks-PC.zip
-            Mostaza-ArtTracks-Mac-Linux.tar.gz
+          path: dist-pc/Mostaza-ArtTracks/
+          compression-level: 0
           retention-days: 90
 
       - name: Publicar paquetes PC en GitHub Releases
