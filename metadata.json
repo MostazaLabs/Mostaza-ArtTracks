@@ -1,0 +1,6 @@
+{
+  "name": "ArtTrack Studio",
+  "description": "Generador de playlists con IA y extensión de Chromium Manifest V3 exclusiva para ArtTracks de YouTube (solo audio oficial y portada estática de álbum, sin videoclips).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
