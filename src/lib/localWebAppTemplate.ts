@@ -181,6 +181,26 @@ function isLoopbackAddr(addr) {
   return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
 }
 
+function isTunnelOrProxy(req) {
+  const h = req.headers || {};
+  if (
+    h['x-forwarded-for'] ||
+    h['x-forwarded-host'] ||
+    h['cf-connecting-ip'] ||
+    h['forwarded'] ||
+    h['via'] ||
+    h['tailscale-user-login']
+  ) {
+    return true;
+  }
+  const host = String(h.host || '').toLowerCase();
+  return host.includes('.ts.net') || host.includes('.trycloudflare.com');
+}
+
+function isDirectLocalOwner(req) {
+  return isLoopbackAddr(req.socket?.remoteAddress) && !isTunnelOrProxy(req);
+}
+
 function parseCookies(cookieHeader) {
   const out = {};
   for (const part of String(cookieHeader || '').split(';')) {
@@ -208,7 +228,7 @@ function checkVisitorAdmission(req, res) {
   const cookies = parseCookies(req.headers.cookie);
   const headerSid = String(req.headers['x-arttrack-session'] || '').trim();
   const existingSid = headerSid || cookies.arttrack_sid || '';
-  const isOwnerLocalhost = isLoopbackAddr(req.socket?.remoteAddress);
+  const isOwnerLocalhost = isDirectLocalOwner(req);
 
   if (existingSid && activeSessions.has(existingSid)) {
     activeSessions.set(existingSid, now);
@@ -874,7 +894,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && urlObj.pathname === '/api/shutdown') {
-      if (!isLoopbackAddr(req.socket?.remoteAddress)) {
+      if (!isDirectLocalOwner(req)) {
         res.writeHead(403, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Solo permitido desde este ordenador.' }));
         return;
@@ -905,7 +925,24 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && urlObj.pathname === '/api/network-info') {
       res.writeHead(200, { ...extraHeaders, 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify(getNetworkInfo()));
+      const netInfo = getNetworkInfo();
+      if (isTunnelOrProxy(req)) {
+        res.end(
+          JSON.stringify({
+            port: netInfo.port,
+            hostname: netInfo.hostname,
+            tailscaleHostnameUrl: null,
+            tailscaleUrls: [],
+            lanUrls: [],
+            localUrl: null,
+            activeUsers: netInfo.activeUsers,
+            maxActiveUsers: netInfo.maxActiveUsers,
+            maxParallelCurations: netInfo.maxParallelCurations,
+          })
+        );
+      } else {
+        res.end(JSON.stringify(netInfo));
+      }
       return;
     }
     if (req.method === 'GET' && urlObj.pathname === '/api/artists') {
@@ -1207,14 +1244,9 @@ function buildLocalIndexHtml(): string {
         .then((r) => (r.ok ? r.json() : null))
         .then((info) => {
           if (!info) return;
-          const directIpUrl = info.tailscaleUrls?.[0];
-          const aliasUrl = info.tailscaleHostnameUrl;
-          const mobileUrl = directIpUrl || aliasUrl;
+          const mobileUrl = info.tailscaleHostnameUrl || info.tailscaleUrls?.[0];
           if (mobileUrl) {
-            tailscaleUrlEl.textContent =
-              directIpUrl && aliasUrl && aliasUrl !== directIpUrl
-                ? directIpUrl + '  (o ' + aliasUrl + ' si renombraste la máquina en Tailscale)'
-                : mobileUrl;
+            tailscaleUrlEl.textContent = mobileUrl;
             tailscaleBar.classList.remove('hidden');
             copyTsBtn.onclick = async () => {
               try {
